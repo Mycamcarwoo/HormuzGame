@@ -1,20 +1,20 @@
-# 호르무즈 지로찾기 - 기술 요구사항 문서 (TRD)
+# 지뢰찾기 모바일 웹게임 - 기술 요구사항 문서 (TRD)
 
 ## 1. 개요
 
 ### 1.1 프로젝트명
-호르무즈 지로찾기 (Hormuz Spot Finder)
+지뢰찾기 모바일 웹게임 (Minesweeper)
 
 ### 1.2 기술 스택
 - **Frontend**: HTML5, CSS3, JavaScript (ES6+)
-- **지도 라이브러리**: Leaflet.js 1.9.4+
+- **CSS Framework**: 없음 (순수 CSS Grid/Flexbox)
 - **데이터 저장**: LocalStorage (클라이언트 측)
 - **배포**: GitHub Pages / Netlify
 
 ### 1.3 기술적 목표
-1. **모바일 최적화**: 터치 이벤트 지원, 반응형 디자인
+1. **모바일 최적화**: 터치 이벤트, 긴 터치, 더블 탭 지원
 2. **빠른 로딩**: 3초 이내 초기 로딩
-3. **오프라인 지원**: Service Worker로 오프라인 플레이 가능
+3. **원활한 반응**: 셀 클릭 반응 0.1초 이내
 4. **접근성**: 웹 접근성 표준 준수
 
 ---
@@ -27,23 +27,23 @@
 ┌─────────────────────────────────────────────────────┐
 │                   Frontend Layer                     │
 │  ┌───────────────┐  ┌───────────────┐  ┌──────────┐ │
-│  │  Game Engine  │  │   UI Layer    │  │   Map    │ │
-│  │               │  │               │  │  Engine  │ │
+│  │  Game Engine  │  │   UI Layer    │  │  Event   │ │
+│  │               │  │               │  │ Handler  │ │
 │  │  - Game Logic │  │  - DOM Update │  │          │ │
-│  │  - Scoring    │  │  - Events     │  │ Leaflet  │ │
-│  │  - State Mgmt │  │  - Animations │  │  .js     │ │
+│  │  - Grid Mgmt  │  │  - Animation  │  │ - Touch  │ │
+│  │  - State Mgmt │  │  - Responsive │  │ - Click  │ │
 │  └───────────────┘  └───────────────┘  └──────────┘ │
 └─────────────────────────────────────────────────────┘
                          ▲
                          │
 ┌─────────────────────────────────────────────────────┐
 │                  Data Layer                         │
-│  ┌───────────────┐  ┌───────────────┐  ┌──────────┐ │
-│  │  LocalStorage │  │  OpenStreet   │  │  Game    │ │
-│  │               │  │      Map      │  │  Data    │ │
-│  │  - User Score │  │  - Tiles      │  │  - Clues │ │
-│  │  - Settings   │  │  - Layers    │  │  - Info  │ │
-│  └───────────────┘  └───────────────┘  └──────────┘ │
+│  ┌───────────────┐  ┌───────────────┐              │
+│  │  LocalStorage │  │  Game State   │              │
+│  │               │  │               │              │
+│  │  - Best Times │  │  - Grid       │              │
+│  │  - Settings   │  │  - Mines      │              │
+│  └───────────────┘  └───────────────┘              │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -51,23 +51,19 @@
 
 #### 2.2.1 Game Engine
 - 게임 로직
-- 점수 계산
+- 그리드 관리
 - 상태 관리
+- 지뢰 배치
 
 #### 2.2.2 UI Layer
 - DOM 업데이트
-- 이벤트 처리
 - 애니메이션
+- 반응형 디자인
 
-#### 2.2.3 Map Engine
-- 지도 렌더링
+#### 2.2.3 Event Handler
+- 터치 이벤트
 - 클릭 이벤트
-- 마커 표시
-
-#### 2.2.4 Data Layer
-- LocalStorage 관리
-- 지도 데이터 로드
-- 게임 데이터 저장
+- 긴 터치 이벤트
 
 ---
 
@@ -81,36 +77,43 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>호르무즈 지로찾기</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>지뢰찾기</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="app">
         <header>
-            <h1>호르무즈 지로찾기</h1>
-            <div id="score">점수: 0</div>
+            <h1>지뢰찾기</h1>
+            <div id="difficulty-selector">
+                <button data-difficulty="beginner">초급</button>
+                <button data-difficulty="intermediate">중급</button>
+                <button data-difficulty="expert">고급</button>
+            </div>
         </header>
-        <main>
-            <div id="map"></div>
-            <div id="clues">
-                <div class="clue-card" id="clue-1">단서 1</div>
-                <div class="clue-card" id="clue-2">단서 2</div>
-                <div class="clue-card" id="clue-3">단서 3</div>
-            </div>
-            <div id="controls">
-                <button id="hint-btn">힌트</button>
-                <button id="submit-btn">정답 제출</button>
-                <button id="restart-btn">다시하기</button>
-            </div>
-        </main>
+
+        <div id="game-info">
+            <div id="mines-count">💣 10</div>
+            <div id="timer">000</div>
+        </div>
+
+        <div id="face-button">😊</div>
+
+        <div id="grid"></div>
+
+        <div id="controls">
+            <button id="reset-btn">리셋</button>
+            <button id="help-btn">도움말</button>
+        </div>
+
         <div id="result-modal" class="modal hidden">
-            <h2>결과</h2>
-            <div id="result-content"></div>
-            <button id="close-modal">닫기</button>
+            <div class="modal-content">
+                <h2 id="result-title"></h2>
+                <div id="result-content"></div>
+                <button id="close-modal">닫기</button>
+            </div>
         </div>
     </div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/game.js"></script>
 </body>
 </html>
@@ -118,7 +121,7 @@
 
 #### 3.1.2 CSS3
 ```css
-/* 반응형 디자인 */
+/* 기본 스타일 */
 * {
     margin: 0;
     padding: 0;
@@ -127,85 +130,157 @@
 
 body {
     font-family: 'Noto Sans KR', sans-serif;
-    background-color: #f5f5f5;
+    background-color: #f0f0f0;
     color: #333;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
 }
 
 #app {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    width: 100%;
+    max-width: 600px;
 }
 
 /* 헤더 */
 header {
-    background-color: #2c3e50;
-    color: white;
-    padding: 1rem;
+    text-align: center;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+h1 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+#difficulty-selector {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    gap: 10px;
+    justify-content: center;
 }
 
-/* 지도 */
-#map {
-    height: 50vh;
-    min-height: 300px;
-}
-
-/* 단서 카드 */
-#clues {
-    padding: 1rem;
-    display: grid;
-    gap: 1rem;
-}
-
-.clue-card {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
-}
-
-.clue-card:hover {
-    transform: translateY(-2px);
-}
-
-/* 컨트롤 */
-#controls {
-    padding: 1rem;
-    display: grid;
-    gap: 0.5rem;
-}
-
-button {
-    padding: 0.75rem;
+#difficulty-selector button {
+    padding: 10px 20px;
     border: none;
-    border-radius: 8px;
+    border-radius: 5px;
+    background-color: #4CAF50;
+    color: white;
     font-size: 1rem;
     cursor: pointer;
     transition: background-color 0.2s;
 }
 
-button:active {
-    transform: scale(0.98);
+#difficulty-selector button:hover {
+    background-color: #45a049;
 }
 
-/* 모바일 최적화 */
-@media (max-width: 768px) {
-    #map {
-        height: 40vh;
-    }
+#difficulty-selector button.active {
+    background-color: #2e7d32;
+}
 
-    .clue-card {
-        font-size: 0.9rem;
-    }
+/* 게임 정보 */
+#game-info {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 15px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    font-size: 1.5rem;
+    font-family: 'Courier New', monospace;
+}
 
-    button {
-        padding: 0.5rem;
-        font-size: 0.9rem;
-    }
+/* 표정 버튼 */
+#face-button {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.1s;
+}
+
+#face-button:active {
+    transform: scale(0.95);
+}
+
+/* 그리드 */
+#grid {
+    display: grid;
+    gap: 2px;
+    background-color: #999;
+    padding: 5px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.cell {
+    background-color: #c0c0c0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s;
+}
+
+.cell:active {
+    background-color: #a0a0a0;
+}
+
+.cell.open {
+    background-color: #e0e0e0;
+    cursor: default;
+}
+
+.cell.mine {
+    background-color: #ffcccc;
+}
+
+.cell.flagged {
+    background-color: #ffcc80;
+}
+
+.cell.questioned {
+    background-color: #80d8ff;
+}
+
+/* 숫자 색상 */
+.cell[data-number="1"] { color: #0000ff; }
+.cell[data-number="2"] { color: #008000; }
+.cell[data-number="3"] { color: #ff0000; }
+.cell[data-number="4"] { color: #000080; }
+.cell[data-number="5"] { color: #800000; }
+.cell[data-number="6"] { color: #008080; }
+.cell[data-number="7"] { color: #000000; }
+.cell[data-number="8"] { color: #808080; }
+
+/* 컨트롤 */
+#controls {
+    display: flex;
+    gap: 10px;
+}
+
+#controls button {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 5px;
+    background-color: #2196F3;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#controls button:hover {
+    background-color: #0b7dda;
 }
 
 /* 모달 */
@@ -233,500 +308,713 @@ button:active {
     max-width: 90%;
     max-height: 80vh;
     overflow-y: auto;
+    text-align: center;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    #grid {
+        padding: 2px;
+        gap: 1px;
+    }
+
+    .cell {
+        font-size: 1rem;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    #game-info {
+        font-size: 1.2rem;
+        padding: 10px;
+    }
+
+    #face-button {
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .cell {
+        font-size: 0.8rem;
+    }
+
+    h1 {
+        font-size: 1.2rem;
+    }
+
+    #game-info {
+        font-size: 1rem;
+        padding: 8px;
+    }
 }
 ```
 
 #### 3.1.3 JavaScript (ES6+)
+
+##### 3.1.3.1 Game Engine
 ```javascript
-// Game Engine
-class GameEngine {
+class MinesweeperGame {
     constructor() {
-        this.score = 0;
-        this.timeUsed = 0;
-        this.hintsUsed = 0;
-        this.startTime = null;
-        this.userGuess = null;
-        this.correctAnswer = { lat: 26.5833, lng: 56.25 };
-        this.state = 'ready'; // ready, playing, finished
+        this.rows = 9;
+        this.cols = 9;
+        this.mines = 10;
+        this.grid = [];
+        this.gameOver = false;
+        this.won = false;
+        this.firstClick = true;
+        this.flagsUsed = 0;
+        this.seconds = 0;
+        this.timerInterval = null;
+        this.difficulty = 'beginner';
     }
 
-    start() {
-        this.startTime = Date.now();
-        this.state = 'playing';
-        this.startTimer();
+    init(difficulty = 'beginner') {
+        this.difficulty = difficulty;
+        this.setupDifficulty(difficulty);
+        this.reset();
+    }
+
+    setupDifficulty(difficulty) {
+        switch (difficulty) {
+            case 'beginner':
+                this.rows = 9;
+                this.cols = 9;
+                this.mines = 10;
+                break;
+            case 'intermediate':
+                this.rows = 16;
+                this.cols = 16;
+                this.mines = 40;
+                break;
+            case 'expert':
+                this.rows = 16;
+                this.cols = 30;
+                this.mines = 99;
+                break;
+        }
+    }
+
+    reset() {
+        this.grid = this.createGrid();
+        this.gameOver = false;
+        this.won = false;
+        this.firstClick = true;
+        this.flagsUsed = 0;
+        this.seconds = 0;
+        this.stopTimer();
+        this.updateDisplay();
+        this.renderGrid();
+    }
+
+    createGrid() {
+        const grid = [];
+        for (let row = 0; row < this.rows; row++) {
+            const rowData = [];
+            for (let col = 0; col < this.cols; col++) {
+                rowData.push({
+                    row,
+                    col,
+                    isMine: false,
+                    isOpen: false,
+                    isFlagged: false,
+                    isQuestioned: false,
+                    neighborMines: 0
+                });
+            }
+            grid.push(rowData);
+        }
+        return grid;
+    }
+
+    placeMines(excludeRow, excludeCol) {
+        let minesPlaced = 0;
+        while (minesPlaced < this.mines) {
+            const row = Math.floor(Math.random() * this.rows);
+            const col = Math.floor(Math.random() * this.cols);
+
+            // 첫 클릭 위치와 주변에는 지뢰를 배치하지 않음
+            if (!this.grid[row][col].isMine &&
+                !(Math.abs(row - excludeRow) <= 1 && Math.abs(col - excludeCol) <= 1)) {
+                this.grid[row][col].isMine = true;
+                minesPlaced++;
+            }
+        }
+
+        // 주변 지뢰 수 계산
+        this.calculateNeighborMines();
+    }
+
+    calculateNeighborMines() {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                if (!this.grid[row][col].isMine) {
+                    this.grid[row][col].neighborMines = this.countNeighborMines(row, col);
+                }
+            }
+        }
+    }
+
+    countNeighborMines(row, col) {
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+
+                if (newRow >= 0 && newRow < this.rows &&
+                    newCol >= 0 && newCol < this.cols &&
+                    this.grid[newRow][newCol].isMine) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    openCell(row, col) {
+        if (this.gameOver || this.won) return;
+        if (this.grid[row][col].isOpen) return;
+        if (this.grid[row][col].isFlagged) return;
+
+        // 첫 클릭은 안전
+        if (this.firstClick) {
+            this.firstClick = false;
+            this.startTimer();
+            this.placeMines(row, col);
+        }
+
+        const cell = this.grid[row][col];
+        cell.isOpen = true;
+
+        // 지뢰 클릭
+        if (cell.isMine) {
+            this.gameOver = true;
+            this.stopTimer();
+            this.revealMines();
+            this.showGameOver(false);
+            return;
+        }
+
+        // 0인 경우 주변 셀 자동 열기
+        if (cell.neighborMines === 0) {
+            this.openNeighbors(row, col);
+        }
+
+        // 승리 확인
+        this.checkWin();
+        this.updateDisplay();
+    }
+
+    openNeighbors(row, col) {
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+
+                if (newRow >= 0 && newRow < this.rows &&
+                    newCol >= 0 && newCol < this.cols &&
+                    !this.grid[newRow][newCol].isOpen &&
+                    !this.grid[newRow][newCol].isFlagged) {
+                    this.openCell(newRow, newCol);
+                }
+            }
+        }
+    }
+
+    toggleFlag(row, col) {
+        if (this.gameOver || this.won) return;
+        if (this.grid[row][col].isOpen) return;
+
+        const cell = this.grid[row][col];
+
+        if (cell.isFlagged) {
+            cell.isFlagged = false;
+            cell.isQuestioned = true;
+            this.flagsUsed--;
+        } else if (cell.isQuestioned) {
+            cell.isQuestioned = false;
+        } else {
+            cell.isFlagged = true;
+            this.flagsUsed++;
+        }
+
+        this.updateDisplay();
+    }
+
+    revealMines() {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                if (this.grid[row][col].isMine) {
+                    this.grid[row][col].isOpen = true;
+                }
+            }
+        }
+    }
+
+    checkWin() {
+        let openCount = 0;
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                if (this.grid[row][col].isOpen && !this.grid[row][col].isMine) {
+                    openCount++;
+                }
+            }
+        }
+
+        const totalSafeCells = this.rows * this.cols - this.mines;
+        if (openCount === totalSafeCells) {
+            this.won = true;
+            this.gameOver = true;
+            this.stopTimer();
+            this.showGameOver(true);
+        }
     }
 
     startTimer() {
-        setInterval(() => {
-            if (this.state === 'playing') {
-                this.timeUsed = Math.floor((Date.now() - this.startTime) / 1000);
-                this.updateTimerDisplay();
+        this.timerInterval = setInterval(() => {
+            this.seconds++;
+            if (this.seconds > 999) {
+                this.stopTimer();
             }
+            this.updateDisplay();
         }, 1000);
     }
 
-    makeGuess(lat, lng) {
-        if (this.state !== 'playing') return;
-
-        this.userGuess = { lat, lng };
-        this.calculateScore();
-        this.state = 'finished';
-        this.showResult();
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
     }
 
-    calculateScore() {
-        // 거리 계산 (Haversine 공식)
-        const distance = this.calculateDistance(
-            this.userGuess.lat,
-            this.userGuess.lng,
-            this.correctAnswer.lat,
-            this.correctAnswer.lng
-        );
+    updateDisplay() {
+        const minesCount = document.getElementById('mines-count');
+        const timer = document.getElementById('timer');
+        const faceButton = document.getElementById('face-button');
 
-        // 정확도 점수
-        let accuracyScore;
-        if (distance <= 50) accuracyScore = 100;
-        else if (distance <= 100) accuracyScore = 80;
-        else if (distance <= 200) accuracyScore = 60;
-        else if (distance <= 500) accuracyScore = 40;
-        else accuracyScore = 20;
+        minesCount.textContent = `💣 ${this.mines - this.flagsUsed}`;
+        timer.textContent = this.seconds.toString().padStart(3, '0');
 
-        // 시간 보너스
-        let timeBonus;
-        if (this.timeUsed <= 60) timeBonus = 50;
-        else if (this.timeUsed <= 120) timeBonus = 30;
-        else if (this.timeUsed <= 180) timeBonus = 10;
-        else timeBonus = 0;
-
-        // 힌트 페널티
-        const hintPenalty = this.hintsUsed * 20;
-
-        // 총점
-        this.score = accuracyScore + timeBonus - hintPenalty;
-        this.score = Math.max(0, this.score); // 0점 이하로 내려가지 않음
+        if (this.gameOver) {
+            faceButton.textContent = this.won ? '🥺' : '😵';
+        } else {
+            faceButton.textContent = '😊';
+        }
     }
 
-    calculateDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371; // 지구 반지름 (km)
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                  Math.sin(dLng/2) * Math.sin(dLng/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
+    renderGrid() {
+        const gridElement = document.getElementById('grid');
+        gridElement.innerHTML = '';
+        gridElement.style.gridTemplateColumns = `repeat(${this.cols}, 1fr)`;
+
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.row = row;
+                cell.dataset.col = col;
+
+                if (this.grid[row][col].isOpen) {
+                    cell.classList.add('open');
+                    if (this.grid[row][col].isMine) {
+                        cell.classList.add('mine');
+                        cell.textContent = '💣';
+                    } else if (this.grid[row][col].neighborMines > 0) {
+                        cell.textContent = this.grid[row][col].neighborMines;
+                        cell.dataset.number = this.grid[row][col].neighborMines;
+                    }
+                } else if (this.grid[row][col].isFlagged) {
+                    cell.classList.add('flagged');
+                    cell.textContent = '🚩';
+                } else if (this.grid[row][col].isQuestioned) {
+                    cell.classList.add('questioned');
+                    cell.textContent = '❓';
+                }
+
+                gridElement.appendChild(cell);
+            }
+        }
     }
 
-    showResult() {
+    showGameOver(won) {
+        this.renderGrid();
+
         const modal = document.getElementById('result-modal');
+        const title = document.getElementById('result-title');
         const content = document.getElementById('result-content');
 
-        const distance = this.calculateDistance(
-            this.userGuess.lat,
-            this.userGuess.lng,
-            this.correctAnswer.lat,
-            this.correctAnswer.lng
-        );
+        title.textContent = won ? '🎉 승리!' : '💥 게임 오버';
 
         content.innerHTML = `
-            <h3>최종 점수: ${this.score}점</h3>
-            <p>거리: ${distance.toFixed(2)} km</p>
-            <p>사용 시간: ${this.timeUsed}초</p>
-            <p>힌트 사용: ${this.hintsUsed}회</p>
-            <div class="educational-info">
-                <h4>호르무즈 해협이란?</h4>
-                <p>
-                    호르무즈 해협은 페르시아만과 오만만을 연결하는 좁은 해협으로,
-                    세계 석유 수송의 20%가 통과하는 전략적으로 중요한 위치입니다.
-                    이란과 아랍에미리트 사이에 위치하며, 폭은 약 54km입니다.
-                </p>
-            </div>
+            <p>시간: ${this.seconds}초</p>
+            <p>난이도: ${this.difficulty}</p>
+            ${won ? '<p>축하합니다! 🎉</p>' : '<p>다시 도전하세요! 💪</p>'}
+        `;
+
+        modal.classList.remove('hidden');
+
+        // 최고 기록 저장
+        if (won) {
+            this.saveBestTime();
+        }
+    }
+
+    saveBestTime() {
+        const key = `minesweeper_${this.difficulty}_best`;
+        const currentBest = localStorage.getItem(key);
+
+        if (!currentBest || this.seconds < parseInt(currentBest)) {
+            localStorage.setItem(key, this.seconds);
+            alert(`🎉 새로운 최고 기록! ${this.seconds}초`);
+        }
+    }
+
+    getBestTime(difficulty) {
+        const key = `minesweeper_${difficulty}_best`;
+        const bestTime = localStorage.getItem(key);
+        return bestTime ? parseInt(bestTime) : null;
+    }
+}
+```
+
+##### 3.1.3.2 Event Handler
+```javascript
+class EventHandler {
+    constructor(game) {
+        this.game = game;
+        this.longPressTimeout = null;
+        this.longPressDuration = 500; // 500ms
+        this.init();
+    }
+
+    init() {
+        // 난이도 버튼
+        document.querySelectorAll('#difficulty-selector button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const difficulty = e.target.dataset.difficulty;
+                this.game.init(difficulty);
+                this.updateActiveButton(difficulty);
+            });
+        });
+
+        // 리셋 버튼
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            this.game.reset();
+        });
+
+        // 도움말 버튼
+        document.getElementById('help-btn').addEventListener('click', () => {
+            this.showHelp();
+        });
+
+        // 표정 버튼
+        document.getElementById('face-button').addEventListener('click', () => {
+            this.game.reset();
+        });
+
+        // 그리드 이벤트
+        const grid = document.getElementById('grid');
+        grid.addEventListener('click', (e) => {
+            if (e.target.classList.contains('cell')) {
+                const row = parseInt(e.target.dataset.row);
+                const col = parseInt(e.target.dataset.col);
+                this.handleLeftClick(row, col);
+            }
+        });
+
+        // 긴 터치 (우클릭 대체)
+        grid.addEventListener('touchstart', (e) => {
+            if (e.target.classList.contains('cell')) {
+                this.longPressTimeout = setTimeout(() => {
+                    const row = parseInt(e.target.dataset.row);
+                    const col = parseInt(e.target.dataset.col);
+                    this.game.toggleFlag(row, col);
+                    this.game.renderGrid();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(100);
+                    }
+                }, this.longPressDuration);
+            }
+        });
+
+        grid.addEventListener('touchend', () => {
+            if (this.longPressTimeout) {
+                clearTimeout(this.longPressTimeout);
+                this.longPressTimeout = null;
+            }
+        });
+
+        grid.addEventListener('touchmove', () => {
+            if (this.longPressTimeout) {
+                clearTimeout(this.longPressTimeout);
+                this.longPressTimeout = null;
+            }
+        });
+
+        // 모바일에서 더블 탭 자동 열기
+        let lastTap = 0;
+        grid.addEventListener('touchend', (e) => {
+            if (e.target.classList.contains('cell') &&
+                this.game.grid[e.target.dataset.row][e.target.dataset.col].isOpen) {
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                if (tapLength < 300 && tapLength > 0) {
+                    const row = parseInt(e.target.dataset.row);
+                    const col = parseInt(e.target.dataset.col);
+                    this.handleAutoOpen(row, col);
+                    e.preventDefault();
+                }
+                lastTap = currentTime;
+            }
+        });
+
+        // 모달 닫기
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('result-modal').classList.add('hidden');
+        });
+    }
+
+    handleLeftClick(row, col) {
+        this.game.openCell(row, col);
+        this.game.renderGrid();
+    }
+
+    handleAutoOpen(row, col) {
+        if (this.game.gameOver || this.game.won) return;
+
+        const cell = this.game.grid[row][col];
+        if (!cell.isOpen || cell.isMine || cell.neighborMines === 0) return;
+
+        // 주변 깃발 수 계산
+        let flagCount = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+
+                if (newRow >= 0 && newRow < this.game.rows &&
+                    newCol >= 0 && newCol < this.game.cols &&
+                    this.game.grid[newRow][newCol].isFlagged) {
+                    flagCount++;
+                }
+            }
+        }
+
+        // 깃발 수와 주변 지뢰 수가 일치하면 주변 셀 열기
+        if (flagCount === cell.neighborMines) {
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+
+                    if (newRow >= 0 && newRow < this.game.rows &&
+                        newCol >= 0 && newCol < this.game.cols &&
+                        !this.game.grid[newRow][newCol].isFlagged &&
+                        !this.game.grid[newRow][newCol].isOpen) {
+                        this.game.openCell(newRow, newCol);
+                    }
+                }
+            }
+            this.game.renderGrid();
+        }
+    }
+
+    updateActiveButton(difficulty) {
+        document.querySelectorAll('#difficulty-selector button').forEach(button => {
+            button.classList.remove('active');
+            if (button.dataset.difficulty === difficulty) {
+                button.classList.add('active');
+            }
+        });
+
+        // 최고 기록 표시
+        const bestTime = this.game.getBestTime(difficulty);
+        if (bestTime) {
+            alert(`최고 기록: ${bestTime}초`);
+        }
+    }
+
+    showHelp() {
+        const modal = document.getElementById('result-modal');
+        const title = document.getElementById('result-title');
+        const content = document.getElementById('result-content');
+
+        title.textContent = '도움말';
+
+        content.innerHTML = `
+            <h3>게임 조작</h3>
+            <p>📱 탭: 셀 열기</p>
+            <p>📱 긴 터치 (500ms): 깃발 표시</p>
+            <p>📱 열린 셀 더블 탭: 주변 셀 자동 열기</p>
+            <h3>PC 조작</h3>
+            <p>🖱️ 좌클릭: 셀 열기</p>
+            <p>🖱️ 우클릭: 깃발 표시</p>
+            <p>🖱️ 더블 클릭: 주변 셀 자동 열기</p>
+            <h3>게임 목표</h3>
+            <p>지뢰를 제외한 모든 셀을 열면 승리합니다!</p>
         `;
 
         modal.classList.remove('hidden');
     }
-
-    updateTimerDisplay() {
-        const timer = document.getElementById('timer');
-        const minutes = Math.floor(this.timeUsed / 60);
-        const seconds = this.timeUsed % 60;
-        timer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
 }
+```
 
-// Map Engine
-class MapEngine {
-    constructor(gameEngine) {
-        this.gameEngine = gameEngine;
-        this.map = null;
-        this.userMarker = null;
-        this.answerMarker = null;
-    }
-
-    init() {
-        this.map = L.map('map').setView([20, 60], 3);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(this.map);
-
-        // 클릭 이벤트
-        this.map.on('click', (e) => {
-            this.handleMapClick(e.latlng);
-        });
-    }
-
-    handleMapClick(latlng) {
-        // 기존 마커 제거
-        if (this.userMarker) {
-            this.map.removeLayer(this.userMarker);
-        }
-
-        // 새 마커 추가
-        this.userMarker = L.marker(latlng).addTo(this.map);
-    }
-
-    submitAnswer() {
-        if (!this.userMarker) {
-            alert('지도를 클릭하여 위치를 선택해주세요.');
-            return;
-        }
-
-        const latlng = this.userMarker.getLatLng();
-        this.gameEngine.makeGuess(latlng.lat, latlng.lng);
-    }
-
-    showAnswer() {
-        // 정답 마커 표시
-        this.answerMarker = L.marker(
-            [this.gameEngine.correctAnswer.lat, this.gameEngine.correctAnswer.lng],
-            { color: 'red' }
-        ).addTo(this.map);
-
-        // 두 마커 사이에 선 그리기
-        const latlngs = [
-            this.userMarker.getLatLng(),
-            [this.gameEngine.correctAnswer.lat, this.gameEngine.correctAnswer.lng]
-        ];
-        L.polyline(latlngs, { color: 'red' }).addTo(this.map);
-
-        // 지도를 두 마커가 모두 보이도록 조정
-        this.map.fitBounds([this.userMarker.getLatLng(), this.answerMarker.getLatLng()], {
-            padding: [50, 50]
-        });
-    }
-}
-
-// UI Manager
-class UIManager {
-    constructor(gameEngine, mapEngine) {
-        this.gameEngine = gameEngine;
-        this.mapEngine = mapEngine;
-    }
-
-    init() {
-        document.getElementById('submit-btn').addEventListener('click', () => {
-            this.mapEngine.submitAnswer();
-            this.mapEngine.showAnswer();
-        });
-
-        document.getElementById('restart-btn').addEventListener('click', () => {
-            location.reload();
-        });
-
-        document.getElementById('close-modal').addEventListener('click', () => {
-            document.getElementById('result-modal').classList.add('hidden');
-        });
-
-        document.getElementById('hint-btn').addEventListener('click', () => {
-            this.showHint();
-        });
-    }
-
-    showHint() {
-        if (this.gameEngine.hintsUsed >= 3) {
-            alert('힌트는 게임당 최대 3개까지만 사용할 수 있습니다.');
-            return;
-        }
-
-        this.gameEngine.hintsUsed++;
-
-        // 힌트 종류 선택
-        const hintType = this.gameEngine.hintsUsed;
-        let hintText;
-
-        switch (hintType) {
-            case 1:
-                hintText = '힌트: 페르시아만과 오만만 사이에 위치합니다.';
-                break;
-            case 2:
-                hintText = '힌트: 이란과 아랍에미리트 사이에 있습니다.';
-                break;
-            case 3:
-                hintText = '힌트: 호르무즈 섬 근처입니다.';
-                break;
-        }
-
-        alert(hintText);
-        this.gameEngine.score -= 20;
-    }
-}
-
+##### 3.1.3.3 메인 실행
+```javascript
 // 초기화
 document.addEventListener('DOMContentLoaded', () => {
-    const gameEngine = new GameEngine();
-    const mapEngine = new MapEngine(gameEngine);
-    const uiManager = new UIManager(gameEngine, mapEngine);
+    const game = new MinesweeperGame();
+    const eventHandler = new EventHandler(game);
 
-    mapEngine.init();
-    uiManager.init();
-    gameEngine.start();
+    // 기본 난이도로 게임 시작
+    game.init('beginner');
+    eventHandler.updateActiveButton('beginner');
 });
 ```
 
-### 3.2 지도 라이브러리 (Leaflet.js)
+---
 
-#### 3.2.1 설치
+## 4. 모바일 최적화
+
+### 4.1 터치 이벤트
+- **탭**: 셀 열기
+- **긴 터치 (500ms)**: 깃발 표시
+- **더블 탭 (300ms 이내)**: 주변 셀 자동 열기
+
+### 4.2 뷰포트 설정
 ```html
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 ```
 
-#### 3.2.2 기본 설정
+### 4.3 진동 피드백
 ```javascript
-const map = L.map('map').setView([20, 60], 3);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19,
-    minZoom: 2
-}).addTo(map);
-```
-
-#### 3.2.3 마커 및 이벤트
-```javascript
-// 마커 추가
-const marker = L.marker([26.5833, 56.25]).addTo(map);
-
-// 클릭 이벤트
-map.on('click', (e) => {
-    console.log('Clicked at:', e.latlng);
-});
-
-// 지도 범위 설정
-map.fitBounds([
-    [20, 50],
-    [30, 70]
-]);
-```
-
-### 3.3 데이터 관리
-
-#### 3.3.1 LocalStorage 사용
-```javascript
-// 점수 저장
-localStorage.setItem('bestScore', 150);
-
-// 점수 불러오기
-const bestScore = localStorage.getItem('bestScore');
-
-// 설정 저장
-const settings = {
-    soundEnabled: true,
-    vibrationEnabled: true
-};
-localStorage.setItem('settings', JSON.stringify(settings));
-
-// 설정 불러오기
-const savedSettings = JSON.parse(localStorage.getItem('settings'));
-```
-
-#### 3.3.2 게임 데이터
-```javascript
-// 호르무즈 해협 데이터
-const hormuzData = {
-    name: '호르무즈 해협',
-    coordinates: { lat: 26.5833, lng: 56.25 },
-    clues: [
-        '페르시아만과 오만만을 연결하는 해협',
-        '세계 석유 수송의 20%가 통과',
-        '이란과 아랍에미리트 사이에 위치'
-    ],
-    hints: [
-        '페르시아만과 오만만 사이에 위치합니다.',
-        '이란과 아랍에미리트 사이에 있습니다.',
-        '호르무즈 섬 근처입니다.'
-    ],
-    educationalInfo: `
-        호르무즈 해협은 페르시아만과 오만만을 연결하는 좁은 해협으로,
-        세계 석유 수송의 20%가 통과하는 전략적으로 중요한 위치입니다.
-        이란과 아랍에미리트 사이에 위치하며, 폭은 약 54km입니다.
-    `
-};
-```
-
-### 3.4 성능 최적화
-
-#### 3.4.1 이미지 최적화
-- WebP 형식 사용
-- 이미지 크기 적절하게 조정
-- 지도 타일 캐싱
-
-#### 3.4.2 JavaScript 최적화
-- 코드 분할 (Code Splitting)
-- 지연 로딩 (Lazy Loading)
-- 이벤트 디바운싱 (Debouncing)
-
-```javascript
-// 디바운싱 예시
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-map.on('move', debounce(() => {
-    console.log('Map moved');
-}, 100));
-```
-
-### 3.5 모바일 최적화
-
-#### 3.5.1 터치 이벤트
-```javascript
-// 터치 이벤트 처리
-map.on('click touchstart', (e) => {
-    console.log('Touched at:', e.latlng);
-});
-```
-
-#### 3.5.2 뷰포트 설정
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-```
-
-#### 3.5.3 진동 피드백
-```javascript
-// 진동 피드백 (안드로이드)
 if (navigator.vibrate) {
     navigator.vibrate(100); // 100ms 진동
 }
 ```
 
-### 3.6 오프라인 지원 (Service Worker)
+### 4.4 셀 크기 조정
+- **초급**: 40px
+- **중급**: 30px
+- **고급**: 25px
 
-#### 3.6.1 Service Worker 등록
+### 4.5 화면 크기에 따른 조정
+- CSS Grid 사용
+- max-width: 600px
+- 반응적 크기 조정
+
+---
+
+## 5. 성능 최적화
+
+### 5.1 그리드 렌더링 최적화
 ```javascript
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-        .then(registration => {
-            console.log('Service Worker registered:', registration);
-        })
-        .catch(error => {
-            console.log('Service Worker registration failed:', error);
-        });
+// 필요한 셀만 업데이트
+updateCell(row, col) {
+    const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    // 셀 업데이트 로직
 }
 ```
 
-#### 3.6.2 Service Worker 구현
+### 5.2 이벤트 위임
 ```javascript
-const CACHE_NAME = 'hormuz-game-v1';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    '/css/style.css',
-    '/js/game.js',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-];
-
-self.addEventListener('install', event => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(urlsToCache))
-    );
+// 그리드 컨테이너에 단일 이벤트 리스너 추가
+grid.addEventListener('click', (e) => {
+    if (e.target.classList.contains('cell')) {
+        // 셀 클릭 처리
+    }
 });
+```
 
-self.addEventListener('fetch', event => {
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // 캐시에 있으면 반환, 없으면 네트워크 요청
-                return response || fetch(event.request);
-            })
-    );
-});
+### 5.3 타이머 최적화
+```javascript
+// requestAnimationFrame 사용
+startTimer() {
+    let startTime = Date.now();
+    const updateTimer = () => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        this.seconds = elapsed;
+        this.updateDisplay();
+        
+        if (elapsed < 1000) {
+            requestAnimationFrame(updateTimer);
+        }
+    };
+    requestAnimationFrame(updateTimer);
+}
 ```
 
 ---
 
-## 4. 보안 및 개인정보
+## 6. 보안 및 개인정보
 
-### 4.1 보안 고려사항
-- **XSS 방지**: 사용자 입력 검증 및 이스케이프
-- **HTTPS 사용**: 모든 통신 암호화
-- **Content Security Policy**: CSP 헤더 설정
+### 6.1 보안 고려사항
+- **XSS 방지**: 사용자 입력 없음
+- **HTTPS 사용**: 배포 시 HTTPS 사용
+- **Content Security Policy**: 불필요 (외부 스크립트 없음)
 
-### 4.2 개인정보 처리
-- **데이터 수집 최소화**: 점수 및 설정만 LocalStorage에 저장
+### 6.2 개인정보 처리
+- **데이터 수집 최소화**: 최고 기록만 LocalStorage에 저장
 - **서버 데이터 없음**: 모든 데이터 클라이언트 측에서 처리
 
 ---
 
-## 5. 테스트
+## 7. 테스트
 
-### 5.1 단위 테스트
+### 7.1 단위 테스트
 ```javascript
-// 거리 계산 테스트
-test('calculateDistance', () => {
-    const distance = gameEngine.calculateDistance(26.5833, 56.25, 26.5, 56.2);
-    expect(distance).toBeCloseTo(5.6, 1);
+// 그리드 생성 테스트
+test('createGrid', () => {
+    game.init('beginner');
+    expect(game.grid.length).toBe(9);
+    expect(game.grid[0].length).toBe(9);
 });
 
-// 점수 계산 테스트
-test('calculateScore', () => {
-    gameEngine.timeUsed = 30;
-    gameEngine.hintsUsed = 0;
-    gameEngine.userGuess = { lat: 26.6, lng: 56.3 };
-    gameEngine.calculateScore();
-    expect(gameEngine.score).toBeGreaterThanOrEqual(80);
+// 지뢰 배치 테스트
+test('placeMines', () => {
+    game.placeMines(4, 4);
+    let mineCount = 0;
+    for (let row = 0; row < game.rows; row++) {
+        for (let col = 0; col < game.cols; col++) {
+            if (game.grid[row][col].isMine) mineCount++;
+        }
+    }
+    expect(mineCount).toBe(10);
 });
 ```
 
-### 5.2 통합 테스트
-- 게임 플레이 전체 흐름 테스트
-- 지도 클릭 및 정답 제출 테스트
-- 점수 계산 및 결과 화면 테스트
+### 7.2 통합 테스트
+- 게임 전체 플레이 테스트
+- 승리/패배 로직 테스트
+- 타이머 테스트
 
-### 5.3 모바일 테스트
+### 7.3 모바일 테스트
 - iOS Safari 테스트
 - Android Chrome 테스트
 - 다양한 화면 크기 테스트
+- 터치 이벤트 테스트
 
 ---
 
-## 6. 배포
+## 8. 배포
 
-### 6.1 GitHub Pages 배포
+### 8.1 GitHub Pages 배포
 ```bash
 # GitHub 리포지토리 생성
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/username/hormuz-game.git
+git remote add origin https://github.com/username/minesweeper.git
 git push -u origin main
 
 # GitHub Pages 설정
 # Settings → Pages → Source: main branch → Save
 ```
 
-### 6.2 Netlify 배포
+### 8.2 Netlify 배포
 ```bash
 # Netlify CLI 설치
 npm install -g netlify-cli
@@ -735,63 +1023,61 @@ npm install -g netlify-cli
 netlify deploy --prod
 ```
 
-### 6.3 CDN 설정
-- Cloudflare 또는 AWS CloudFront 사용
-- 정적 리소스 캐싱 설정
-
 ---
 
-## 7. 성능 모니터링
+## 9. 성능 모니터링
 
-### 7.1 웹 성능
-- **Lighthouse 점수**: 90점 이상
-- **FCP (First Contentful Paint)**: 1.5초 이내
-- **TTI (Time to Interactive)**: 3초 이내
+### 9.1 웹 성능
+- **Lighthouse 점수**: 95점 이상
+- **FCP (First Contentful Paint)**: 1초 이내
+- **TTI (Time to Interactive)**: 2초 이내
 - **CLS (Cumulative Layout Shift)**: 0.1 이하
 
-### 7.2 사용자 분석
-- Google Analytics 통합
-- 이벤트 추적 (게임 시작, 정답 제출, 완료)
-- 사용자 유입 경로 분석
+### 9.2 사용자 분석
+- Google Analytics 통합 (선택사항)
+- 이벤트 추적 (게임 시작, 승리, 패배)
+- 난이도 분석
 
 ---
 
-## 8. 개발 일정
+## 10. 개발 일정
 
-### 8.1 Week 1: 기본 기능 구현
-- Day 1-2: HTML/CSS 구조 구현
-- Day 3-4: JavaScript 로직 구현
-- Day 5: 지도 기능 구현
+### 10.1 Week 1: MVP 개발
+- Day 1-2: 기본 게임 로직 구현
+- Day 3-4: UI/UX 구현
+- Day 5: 테스트 및 버그 수정
 
-### 8.2 Week 2: UI/UX 개선
-- Day 1-2: 반응형 디자인
-- Day 3-4: 모바일 최적화
-- Day 5: 애니메이션 및 효과
+### 10.2 Week 2: 업데이트
+- Day 1-2: 모바일 최적화
+- Day 3-4: 최고 기록 저장
+- Day 5: 테스트 및 배포
 
-### 8.3 Week 3: 테스트 및 배포
-- Day 1-2: 테스트 및 버그 수정
-- Day 3-4: 성능 최적화
-- Day 5: 배포 및 릴리스
+### 10.3 Week 3: 확장
+- Day 1-2: 커스텀 난이도
+- Day 3-4: 테마 추가
+- Day 5: 마케팅
 
 ---
 
-## 9. 기술 우선순위
+## 11. 기술 우선순위
 
-### 9.1 MVP (최소 기능 제품)
+### 11.1 MVP (최소 기능 제품)
 - [x] 기본 게임 플레이
-- [x] 세계 지도 표시
-- [x] 점수 계산
+- [x] 3개 난이도
+- [x] 타이머
 - [x] 모바일 지원
 
-### 9.2 Phase 2 (업데이트)
-- [ ] 힌트 시스템
+### 11.2 Phase 2 (업데이트)
+- [ ] 긴 터치 깃발
+- [ ] 더블 탭 자동 열기
+- [ ] 최고 기록 저장
 - [ ] 랭킹 시스템
-- [ ] Service Worker (오프라인)
 
-### 9.3 Phase 3 (확장)
+### 11.3 Phase 3 (확장)
+- [ ] 커스텀 난이도
+- [ ] 다양한 테마
 - [ ] 소셜 공유
-- [ ] 여러 위치 도전
-- [ ] 멀티플레이어
+- [ ] 오프라인 지원
 
 ---
 
